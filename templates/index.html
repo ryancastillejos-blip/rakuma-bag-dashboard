@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Japan Bag Finder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 5px;
+    }
+
+    .meta {
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    .card {
+      background: white;
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .card img {
+      width: 100%;
+      height: 260px;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    .brand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+
+    .brand {
+      font-weight: bold;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+
+    .label {
+      padding: 5px 10px;
+      border-radius: 999px;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .price {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 10px 0 4px 0;
+    }
+
+    .yen {
+      color: #666;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .title-en {
+      font-size: 15px;
+      line-height: 1.4;
+      margin-bottom: 14px;
+    }
+
+    .title-jp {
+      color: #555;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .btn-dark {
+      background: #111;
+      color: white;
+    }
+
+    .btn-light {
+      background: #eee;
+      color: #111;
+    }
+
+    .loading,
+    .error {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 800px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Japan Bag Finder</h1>
+    <div id="meta" class="meta">Loading...</div>
+    <div id="content" class="loading">Loading listings...</div>
+  </div>
+
+  <script>
+    function getColor(label) {
+      if (label === "Excellent") return "#22c55e";
+      if (label === "Good") return "#eab308";
+      if (label === "Skip") return "#ef4444";
+      return "#9ca3af";
+    }
+
+    function escapeHtml(text) {
+      if (text === null || text === undefined) return "";
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function loadListings() {
+      const meta = document.getElementById("meta");
+      const content = document.getElementById("content");
+
+      try {
+        const response = await fetch("./sample_listings.json", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Could not load sample_listings.json");
+        }
+
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+
+        meta.textContent = "Last updated: " + (data.last_updated || "Unknown");
+
+        if (!items.length) {
+          content.className = "error";
+          content.textContent = "No listings found.";
+          return;
+        }
+
+        const cards = items.map(item => {
+          const color = getColor(item.condition_label);
+          return `
+            <div class="card">
+              <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title_en || item.title_jp || item.brand)}">
+
+              <div class="brand-row">
+                <div class="brand">${escapeHtml(item.brand)}</div>
+                <div class="label" style="background:${color}">
+                  ${escapeHtml(item.condition_label || "Review")}
+                </div>
+              </div>
+
+              <div class="price">$${escapeHtml(item.price_usd_est)}</div>
+              <div class="yen">¥${escapeHtml(item.price_yen)}</div>
+
+              <div class="title-en">${escapeHtml(item.title_en || "")}</div>
+              <div class="title-jp">${escapeHtml(item.title_jp || "")}</div>
+
+              <div class="actions">
+                <a class="btn btn-dark" href="${escapeHtml(item.listing_url)}" target="_blank" rel="noopener noreferrer">Open listing</a>
+                <a class="btn btn-light" href="${escapeHtml(item.image_url)}" target="_blank" rel="noopener noreferrer">Open image</a>
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        content.className = "grid";
+        content.innerHTML = cards;
+      } catch (err) {
+        meta.textContent = "Error loading site";
+        content.className = "error";
+        content.textContent = "Could not load listings. Make sure sample_listings.json is in the repo root.";
+      }
+    }
+
+    loadListings();
+  </script>
+</body>
+</html>

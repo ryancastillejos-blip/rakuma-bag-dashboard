@@ -1,0 +1,8 @@
+uses: actions/setup-python
+with:
+python-version: 3.11
+jobs:
+update-listings:
+step:
+name: Fetch Data
+run: python fetch_rakuma.py

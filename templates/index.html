@@ -26,6 +26,46 @@
       margin-bottom: 20px;
     }
 
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 20px;
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      min-width: 180px;
+      gap: 6px;
+    }
+
+    .control-group label {
+      font-size: 13px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .control-group select {
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: white;
+      font-size: 14px;
+    }
+
+    .results-count {
+      margin-left: auto;
+      font-size: 14px;
+      color: #555;
+      font-weight: bold;
+    }
+
     .grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -123,7 +163,8 @@
     }
 
     .loading,
-    .error {
+    .error,
+    .empty {
       background: white;
       padding: 20px;
       border-radius: 12px;
@@ -140,11 +181,25 @@
       .grid {
         grid-template-columns: repeat(2, 1fr);
       }
+
+      .results-count {
+        width: 100%;
+        margin-left: 0;
+      }
     }
 
     @media (max-width: 560px) {
       .grid {
         grid-template-columns: 1fr;
+      }
+
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .control-group {
+        min-width: 100%;
       }
     }
   </style>
@@ -153,10 +208,42 @@
   <div class="container">
     <h1>Japan Bag Finder</h1>
     <div id="meta" class="meta">Loading...</div>
+
+    <div id="controls" class="controls" style="display:none;">
+      <div class="control-group">
+        <label for="brandFilter">Brand</label>
+        <select id="brandFilter">
+          <option value="all">All brands</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="conditionFilter">Condition</label>
+        <select id="conditionFilter">
+          <option value="all">All conditions</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="sortBy">Sort by</label>
+        <select id="sortBy">
+          <option value="default">Default</option>
+          <option value="price-low">Price low to high</option>
+          <option value="price-high">Price high to low</option>
+          <option value="brand-az">Brand A to Z</option>
+          <option value="brand-za">Brand Z to A</option>
+        </select>
+      </div>
+
+      <div id="resultsCount" class="results-count"></div>
+    </div>
+
     <div id="content" class="loading">Loading listings...</div>
   </div>
 
   <script>
+    let allItems = [];
+
     function getColor(label) {
       if (label === "Excellent") return "#22c55e";
       if (label === "Good") return "#eab308";
@@ -174,12 +261,109 @@
         .replaceAll("'", "&#039;");
     }
 
+    function toNumber(value) {
+      const num = parseFloat(value);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function populateFilters(items) {
+      const brandFilter = document.getElementById("brandFilter");
+      const conditionFilter = document.getElementById("conditionFilter");
+
+      const brands = [...new Set(items.map(item => (item.brand || "").trim()).filter(Boolean))].sort();
+      const conditions = [...new Set(items.map(item => (item.condition_label || "").trim()).filter(Boolean))].sort();
+
+      brandFilter.innerHTML = '<option value="all">All brands</option>';
+      conditionFilter.innerHTML = '<option value="all">All conditions</option>';
+
+      brands.forEach(brand => {
+        const option = document.createElement("option");
+        option.value = brand;
+        option.textContent = brand;
+        brandFilter.appendChild(option);
+      });
+
+      conditions.forEach(condition => {
+        const option = document.createElement("option");
+        option.value = condition;
+        option.textContent = condition;
+        conditionFilter.appendChild(option);
+      });
+    }
+
+    function renderListings() {
+      const content = document.getElementById("content");
+      const resultsCount = document.getElementById("resultsCount");
+      const brandFilter = document.getElementById("brandFilter").value;
+      const conditionFilter = document.getElementById("conditionFilter").value;
+      const sortBy = document.getElementById("sortBy").value;
+
+      let filtered = [...allItems];
+
+      if (brandFilter !== "all") {
+        filtered = filtered.filter(item => (item.brand || "") === brandFilter);
+      }
+
+      if (conditionFilter !== "all") {
+        filtered = filtered.filter(item => (item.condition_label || "") === conditionFilter);
+      }
+
+      if (sortBy === "price-low") {
+        filtered.sort((a, b) => toNumber(a.price_usd_est) - toNumber(b.price_usd_est));
+      } else if (sortBy === "price-high") {
+        filtered.sort((a, b) => toNumber(b.price_usd_est) - toNumber(a.price_usd_est));
+      } else if (sortBy === "brand-az") {
+        filtered.sort((a, b) => (a.brand || "").localeCompare(b.brand || ""));
+      } else if (sortBy === "brand-za") {
+        filtered.sort((a, b) => (b.brand || "").localeCompare(a.brand || ""));
+      }
+
+      resultsCount.textContent = filtered.length + " listing" + (filtered.length === 1 ? "" : "s");
+
+      if (!filtered.length) {
+        content.className = "empty";
+        content.textContent = "No listings match your filters.";
+        return;
+      }
+
+      const cards = filtered.map(item => {
+        const color = getColor(item.condition_label);
+        return `
+          <div class="card">
+            <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title_en || item.title_jp || item.brand)}">
+
+            <div class="brand-row">
+              <div class="brand">${escapeHtml(item.brand)}</div>
+              <div class="label" style="background:${color}">
+                ${escapeHtml(item.condition_label || "Review")}
+              </div>
+            </div>
+
+            <div class="price">$${escapeHtml(item.price_usd_est)}</div>
+            <div class="yen">¥${escapeHtml(item.price_yen)}</div>
+
+            <div class="title-en">${escapeHtml(item.title_en || "")}</div>
+            <div class="title-jp">${escapeHtml(item.title_jp || "")}</div>
+
+            <div class="actions">
+              <a class="btn btn-dark" href="${escapeHtml(item.listing_url)}" target="_blank" rel="noopener noreferrer">Open listing</a>
+              <a class="btn btn-light" href="${escapeHtml(item.image_url)}" target="_blank" rel="noopener noreferrer">Open image</a>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      content.className = "grid";
+      content.innerHTML = cards;
+    }
+
     async function loadListings() {
       const meta = document.getElementById("meta");
       const content = document.getElementById("content");
+      const controls = document.getElementById("controls");
 
       try {
-        const response = await fetch("./sample_listings.json", { cache: "no-store" });
+        const response = await fetch("/sample_listings.json", { cache: "no-store" });
         if (!response.ok) {
           throw new Error("Could not load sample_listings.json");
         }
@@ -195,39 +379,19 @@
           return;
         }
 
-        const cards = items.map(item => {
-          const color = getColor(item.condition_label);
-          return `
-            <div class="card">
-              <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title_en || item.title_jp || item.brand)}">
+        allItems = items;
+        populateFilters(allItems);
+        controls.style.display = "flex";
+        renderListings();
 
-              <div class="brand-row">
-                <div class="brand">${escapeHtml(item.brand)}</div>
-                <div class="label" style="background:${color}">
-                  ${escapeHtml(item.condition_label || "Review")}
-                </div>
-              </div>
+        document.getElementById("brandFilter").addEventListener("change", renderListings);
+        document.getElementById("conditionFilter").addEventListener("change", renderListings);
+        document.getElementById("sortBy").addEventListener("change", renderListings);
 
-              <div class="price">$${escapeHtml(item.price_usd_est)}</div>
-              <div class="yen">¥${escapeHtml(item.price_yen)}</div>
-
-              <div class="title-en">${escapeHtml(item.title_en || "")}</div>
-              <div class="title-jp">${escapeHtml(item.title_jp || "")}</div>
-
-              <div class="actions">
-                <a class="btn btn-dark" href="${escapeHtml(item.listing_url)}" target="_blank" rel="noopener noreferrer">Open listing</a>
-                <a class="btn btn-light" href="${escapeHtml(item.image_url)}" target="_blank" rel="noopener noreferrer">Open image</a>
-              </div>
-            </div>
-          `;
-        }).join("");
-
-        content.className = "grid";
-        content.innerHTML = cards;
       } catch (err) {
         meta.textContent = "Error loading site";
         content.className = "error";
-        content.textContent = "Could not load listings. Make sure sample_listings.json is in the repo root.";
+        content.textContent = "Could not load listings.";
       }
     }
 
